@@ -7,22 +7,22 @@
 #include <sys/socket.h>
 #define BOARD_SIZE 5
 
+void socket_settings(char *ip, char *port); //소켓의 세팅
 void error_check(int validation, char *message); //실행 오류 검사
 int value_check(int number); //점수 유효값 검사
 void game_init(); //빙고판 생성
 void game_print(int number, int turn_count); //게임진행
+void server_turn(); //서버 차례
+void client_turn(int turn_count); //클라이언트 차례
 
 int board[BOARD_SIZE][BOARD_SIZE]; //보드판 배열
-//int turn[BOARD_SIZE*BOARD_SIZE]; //턴마다 숫자 기록
-int flag=1; //게임 승리여부
-int check_number[BOARD_SIZE*BOARD_SIZE+1]={0};
-int socket_fd;
-int turn[5];
+int check_number[BOARD_SIZE*BOARD_SIZE+1]={0}; //중복검사용 배열
+int socket_fd; //소켓 파일디스크립터
+int turn[5]; //어플리케이션 프로토콜 정의
 
 void main(int argc, char *argv[])
 {
-	int array_len, recv_len, recv_count, i, j;
-	struct sockaddr_in server_adr;
+	int i, j;
 
 	if(argc!=3)
 	{
@@ -30,51 +30,20 @@ void main(int argc, char *argv[])
 		exit(1);
 	}
 
-	socket_fd=socket(PF_INET, SOCK_STREAM, IPPROTO_TCP); //TCP소켓 생성
-	error_check(socket_fd, "소켓 생성");
-
-	memset(&server_adr, 0, sizeof(server_adr)); //구조체 변수 값 초기화
-	server_adr.sin_family=AF_INET; //IPv4
-	server_adr.sin_port=htons(atoi(argv[2])); //포트 할당
-	server_adr.sin_addr.s_addr=inet_addr(argv[1]); //IP 할당
-
-	error_check(connect(socket_fd, (struct sockaddr *)&server_adr, sizeof(server_adr)), "연결 요청");
+	socket_settings(argv[1], argv[2]);
 
 	printf("빙고게임을 시작합니다.\n");
 	game_init();
+	game_print(0, 0);
 	
-	for(i=0;i<BOARD_SIZE*BOARD_SIZE&&flag;i++)
+	for(i=1;i<BOARD_SIZE*BOARD_SIZE;i++)
 	{
-		turn[0]=i+1;
+		if(i%2==1)
+			client_turn(i);
 
-		if(i%2==0) //클라이언트 차례
-		{
-			printf("%d턴 숫자를 입력해주세요 : ", i+1);
-			scanf("%d", &turn[3]);
-			turn[3]=value_check(turn[3]);
-			check_number[turn[3]]=1;
-			
-			array_len=write(socket_fd, turn, sizeof(turn));
-			printf("%d 바이트의 게임정보를 전송하였습니다\n", array_len);
-			error_check(array_len, "데이터전송");
-		}
+		else
+			server_turn();
 
-		else //서버 차례
-		{
-			recv_len=0;
-			while(recv_len!=sizeof(turn)) // 패킷이 잘려서 올수도 있으므로 예외처리를 위한 조건문
-			{
-				recv_count=read(socket_fd, turn, sizeof(turn));
-				error_check(recv_count, "데이터수신");
-				if(recv_count==0) break;
-				printf("%d 바이트를 수신하였습니다\n", recv_count);
-				recv_len+=recv_count;
-			}
-			check_number[turn[3]]=1;
-			
-		}
-		for(j=0;j<5;j++)
-			printf("turn[%d]=%d\n", j, turn[j]);
 		if(turn[1]==1)
 		{
 			printf("클라이언트 승리\n");
@@ -86,11 +55,25 @@ void main(int argc, char *argv[])
 			break;
 		}
 		game_print(turn[3], i);
-		printf("=============\n");
+		for(j=0;j<5;j++) printf("turn[%d]=%d\n", j, turn[j]); //디버깅용
 	}
 	close(socket_fd);
 
-	printf("프로그램을 종료합니다\n");
+	printf("빙고게임을 종료합니다\n");
+}
+void socket_settings(char *ip, char *port)
+{
+	struct sockaddr_in server_adr;
+
+	socket_fd=socket(PF_INET, SOCK_STREAM, IPPROTO_TCP); //TCP소켓 생성
+	error_check(socket_fd, "소켓 생성");
+
+	memset(&server_adr, 0, sizeof(server_adr)); //구조체 변수 값 초기화
+	server_adr.sin_family=AF_INET; //IPv4
+	server_adr.sin_port=htons(atoi(port)); //포트 할당
+	server_adr.sin_addr.s_addr=inet_addr(ip); //IP 할당
+
+	error_check(connect(socket_fd, (struct sockaddr *)&server_adr, sizeof(server_adr)), "연결 요청");
 }
 void error_check(int validation, char* message)
 {
@@ -125,36 +108,19 @@ void game_init()
 		recv_count=read(socket_fd, board, sizeof(board));
 		error_check(recv_count, "데이터수신");
 		if(recv_count==-0) break;
-		printf("%d 바이트의 board를 수신하였습니다\n", recv_count);
+		printf("%d 바이트: board를 수신하였습니다\n", recv_count);
 		recv_len+=recv_count;
 	}
-
-	system("clear"); //화면 초기화
-
-	printf("%c[1;33m",27); //터미널 글자색을 노랑색으로 변경
-	
-	printf("@------ 빙고판 현황 ------@\n\n"); 
-	printf("+----+----+----+----+----+\n"); 
-	for(i=0; i < BOARD_SIZE; i++)
-	{
-		for(j=0; j < BOARD_SIZE; j++)
-		{
-			printf("| %2d ", board[i][j]); 
-		}
-		printf("|\n");
-		printf("+----+----+----+----+----+\n"); 
-	}      
-	printf("%c[0m", 27); //터미널 글자색을 원래색으로 변경
 }
 void game_print(int number, int turn_count)
 {
-	int i, j; //카운트용 변수
+	int i, j;
 
-	//system("clear"); //화면 초기화
+	system("clear"); //동적 효과를 위한 화면 초기화
 	printf("%c[1;33m",27); //터미널 글자색을 노랑색으로 변경
 	
-	printf("@------ 빙고판 현황 ------@\n");
-	printf("진행 턴수: %d\n", turn_count+1); 
+	printf("@------ 클라 빙고판 ------@\n");
+	printf("진행 턴수: %d\n", turn_count); 
 	printf("+----+----+----+----+----+\n"); 
 	for(i=0; i < BOARD_SIZE; i++)
 	{
@@ -176,4 +142,33 @@ void game_print(int number, int turn_count)
 		printf("+----+----+----+----+----+\n"); 
 	}      
 	printf("%c[0m", 27); //터미널 글자색을 원래색으로 변경
+}
+void server_turn()
+{
+	int recv_len=0;
+
+	while(recv_len!=sizeof(turn)) // 패킷이 잘려서 올수도 있으므로 예외처리를 위한 조건문
+	{
+		int recv_count;
+
+		recv_count=read(socket_fd, turn, sizeof(turn));
+		error_check(recv_count, "데이터수신");
+		if(recv_count==0) break;
+		printf("%d 바이트: 서버의 턴 정보를 수신하였습니다\n", recv_count);
+		recv_len+=recv_count;
+	}
+	check_number[turn[3]]=1;
+}
+void client_turn(int turn_count)
+{
+	int array_len;
+
+	printf("%d턴 숫자를 입력해주세요 : ", turn_count);
+	scanf("%d", &turn[3]);
+	turn[3]=value_check(turn[3]);
+	check_number[turn[3]]=1;
+	
+	array_len=write(socket_fd, turn, sizeof(turn));
+	printf("%d 바이트: 클라이언트의 턴 정보를 전송하였습니다\n", array_len);
+	error_check(array_len, "데이터전송");
 }
