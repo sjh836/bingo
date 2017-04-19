@@ -15,14 +15,21 @@ void client_game_init(); //클라이언트 빙고판 생성
 void game_print(int turn_count); //빙고판 화면출력
 void server_turn(); //서버 차례
 void client_turn(); //클라이언트 차례
-void game_run(int board[][BOARD_SIZE], int number); //빙고판에 X 체크
+void board_X(int board[][BOARD_SIZE], int number); //빙고판에 X 체크
+void game_run(); //게임 진행 및 승리여부 체크
 int bingo_check(int board[][BOARD_SIZE]); //빙고 줄 검사, 게임 종료조건 검사
 
 int server_board[BOARD_SIZE][BOARD_SIZE]; //서버 보드판 배열
 int client_board[BOARD_SIZE][BOARD_SIZE]; //클라이언트 보드판 배열
 int check_number[BOARD_SIZE*BOARD_SIZE+1]={0}; //중복검사용 배열
 int server_fd, client_fd; //소켓 파일디스크립터
-int turn[5]; //어플리케이션 프로토콜 정의
+int turn[4]; //어플리케이션 프로토콜 정의
+/*
+	turn[0]=플레이어 숫자선택
+	turn[1]=클라이언트 빙고 수
+	turn[2]=서버 빙고 수
+	turn[3]=게임종료여부(0=진행중, 1=클라이언트 승리, 2=서버 승리, 3=무승부)
+*/
 
 void main(int argc, char *argv[])
 {
@@ -45,26 +52,29 @@ void main(int argc, char *argv[])
 	{
 		if(i%2==1)
 			client_turn();
-
 		else
 		{
 			sleep(1); //대전을 체감하기위한 1초의 딜레이
 			server_turn();
 		}
 
-		if(turn[1]==1)
+		game_print(i);
+		for(j=0;j<4;j++) printf("turn[%d]=%d\n", j, turn[j]); //디버깅용
+		if(turn[3]==1)
 		{
-			game_print(i);
 			printf("클라이언트 승리\n");
 			break;
 		}
-		else if(turn[1]==2)
+		else if(turn[3]==2)
 		{
 			printf("서버 승리\n");
 			break;
 		}
-		game_print(i);
-		for(j=0;j<5;j++) printf("turn[%d]=%d\n", j, turn[j]); //디버깅용
+		else if(turn[3]==3)
+		{
+			printf("무승부\n");
+			break;
+		}
 	}
 
 	close(client_fd);
@@ -210,7 +220,7 @@ int bingo_check(int board[][BOARD_SIZE])
 		count++;
 	return count;
 }
-void game_run(int board[][BOARD_SIZE], int number)
+void board_X(int board[][BOARD_SIZE], int number)
 {
 	int i, j;
 	
@@ -229,28 +239,22 @@ void server_turn()
 
 	while(1)
 	{
-		turn[3]=rand()%25+1;
-		if(check_number[turn[3]]==0)
+		turn[0]=rand()%25+1;
+		if(check_number[turn[0]]==0)
 		{
-			check_number[turn[3]]=1;
+			check_number[turn[0]]=1;
 			break;
 		}
 	}
-	game_run(server_board, turn[3]);
-	game_run(client_board, turn[3]);
-	turn[4]=bingo_check(server_board);
+	game_run();
 
-	if(turn[4]>=5)
-	{
-		turn[1]=2;
-	}
 	array_len=write(client_fd, turn, sizeof(turn));
 	printf("%d 바이트: 서버의 턴 정보를 전송하였습니다\n", array_len);
 	error_check(array_len, "데이터전송");
 }
 void client_turn()
 {
-	int recv_len=0;
+	int recv_len=0, array_len;
 
 	while(recv_len!=sizeof(turn)) // 패킷이 잘려서 올수도 있으므로 예외처리를 위한 조건문
 	{
@@ -262,17 +266,24 @@ void client_turn()
 		printf("%d 바이트: 클라이언트의 턴 정보를 수신하였습니다\n", recv_count);
 		recv_len+=recv_count;
 	}
-	game_run(server_board, turn[3]);
-	game_run(client_board, turn[3]);
-	check_number[turn[3]]=1;
-	turn[2]=bingo_check(client_board);
-	
-	if(turn[2]>=5)
-	{
-		int array_len;
-		turn[1]=1;
-		array_len=write(client_fd, turn, sizeof(turn));
-		printf("%d 바이트: 클라이언트의 빙고를 전송하였습니다\n", array_len);
-		error_check(array_len, "데이터전송");
-	}
+	game_run();
+	check_number[turn[0]]=1;
+
+	array_len=write(client_fd, turn, sizeof(turn));
+	printf("%d 바이트: 클라이언트의 턴 정보를 전송하였습니다\n", array_len);
+	error_check(array_len, "데이터전송");
+}
+void game_run()
+{
+	board_X(server_board, turn[0]);
+	board_X(client_board, turn[0]);
+	turn[1]=bingo_check(client_board);
+	turn[2]=bingo_check(server_board);
+
+	if(turn[1]>=5&&turn[2]>=5)
+		turn[3]=3; //무승부
+	else if(turn[1]>=5)
+		turn[3]=1; //클라이언트 승리
+	else if(turn[2]>=5)
+		turn[3]=2; //서버 승리
 }

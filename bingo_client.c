@@ -18,7 +18,13 @@ void client_turn(int turn_count); //클라이언트 차례
 int board[BOARD_SIZE][BOARD_SIZE]; //보드판 배열
 int check_number[BOARD_SIZE*BOARD_SIZE+1]={0}; //중복검사용 배열
 int socket_fd; //소켓 파일디스크립터
-int turn[5]; //어플리케이션 프로토콜 정의
+int turn[4]; //어플리케이션 프로토콜 정의
+/*
+	turn[0]=플레이어 숫자선택
+	turn[1]=클라이언트 빙고 수
+	turn[2]=서버 빙고 수
+	turn[3]=게임종료여부(0=진행중, 1=클라이언트 승리, 2=서버 승리, 3=무승부)
+*/
 
 void main(int argc, char *argv[])
 {
@@ -40,22 +46,27 @@ void main(int argc, char *argv[])
 	{
 		if(i%2==1)
 			client_turn(i);
-
 		else
 			server_turn();
 
-		if(turn[1]==1)
+		game_print(turn[0], i);
+		//for(j=0;j<4;j++) printf("turn[%d]=%d\n", j, turn[j]); //디버깅용
+
+		if(turn[3]==1)
 		{
 			printf("클라이언트 승리\n");
 			break;
 		}
-		else if(turn[1]==2)
+		else if(turn[3]==2)
 		{
 			printf("서버 승리\n");
 			break;
 		}
-		game_print(turn[3], i);
-		for(j=0;j<5;j++) printf("turn[%d]=%d\n", j, turn[j]); //디버깅용
+		else if(turn[3]==3)
+		{
+			printf("무승부\n");
+			break;
+		}
 	}
 	close(socket_fd);
 
@@ -142,6 +153,11 @@ void game_print(int number, int turn_count)
 		printf("+----+----+----+----+----+\n"); 
 	}      
 	printf("%c[0m", 27); //터미널 글자색을 원래색으로 변경
+	if(turn_count!=0)
+	{
+		printf("숫자: %d\n", turn[0]);
+		printf("빙고수: %d\n", turn[1]);
+	}
 }
 void server_turn()
 {
@@ -157,18 +173,29 @@ void server_turn()
 		printf("%d 바이트: 서버의 턴 정보를 수신하였습니다\n", recv_count);
 		recv_len+=recv_count;
 	}
-	check_number[turn[3]]=1;
+	check_number[turn[0]]=1;
 }
 void client_turn(int turn_count)
 {
-	int array_len;
+	int array_len, recv_len=0;;
 
 	printf("%d턴 숫자를 입력해주세요 : ", turn_count);
-	scanf("%d", &turn[3]);
-	turn[3]=value_check(turn[3]);
-	check_number[turn[3]]=1;
+	scanf("%d", &turn[0]);
+	turn[0]=value_check(turn[0]);
+	check_number[turn[0]]=1;
 	
 	array_len=write(socket_fd, turn, sizeof(turn));
 	printf("%d 바이트: 클라이언트의 턴 정보를 전송하였습니다\n", array_len);
 	error_check(array_len, "데이터전송");
+
+	while(recv_len!=sizeof(turn))
+	{
+		int recv_count;
+
+		recv_count=read(socket_fd, turn, sizeof(turn));
+		error_check(recv_count, "데이터수신");
+		if(recv_count==0) break;
+		printf("%d 바이트: 서버의 턴 정보를 수신하였습니다\n", recv_count);
+		recv_len+=recv_count;
+	}
 }
