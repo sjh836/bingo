@@ -18,10 +18,17 @@
 
 ### 즐겜
 1. 게임시작
+
 ![게임시작](http://img1.daumcdn.net/thumb/R1920x0/?fname=http%3A%2F%2Fcfile8.uf.tistory.com%2Fimage%2F2418845058F75E5B2CBAE1)
+
 2. 클라이언트 승리
+
 ![게임시작](http://img1.daumcdn.net/thumb/R1920x0/?fname=http%3A%2F%2Fcfile30.uf.tistory.com%2Fimage%2F261D895058F75E5F2011D4)
+
 3. 서버 승리
+
 ![게임시작](http://img1.daumcdn.net/thumb/R1920x0/?fname=http%3A%2F%2Fcfile7.uf.tistory.com%2Fimage%2F2310575058F75E5D0539EC)
+
 4. 무승부
+
 ![게임시작](http://img1.daumcdn.net/thumb/R1920x0/?fname=http%3A%2F%2Fcfile6.uf.tistory.com%2Fimage%2F2333545058F75E5C296CF7)
